@@ -16,12 +16,12 @@ Async state, not federation. The sender announces. The receiver pulls.
 
 ## State Machine
 
-```
+
 | PING EXISTS | → | PING RECEIVED | → | CONTENT PULLED | → | ACKNOWLEDGED |
 |-------------|---|---------------|---|----------------|---|--------------|
 | Sender      |   | Receiver      |   | Receiver       |   | Sender       |
 | Sends       |   | Notified      |   | Fetches        |   | Confirmed    |
-```
+
 
 ## API Surface
 
