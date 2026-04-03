@@ -1,0 +1,8 @@
+{
+  "name": "ping-js",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "express": "^4.18.0"
+  }
+}

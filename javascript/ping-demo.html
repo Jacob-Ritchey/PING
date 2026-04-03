@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PING — Protocol Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:       #030508;
+  --surface:  #090e18;
+  --surface2: #0e1622;
+  --border:   #1a2840;
+  --border2:  #243550;
+  --text:     #c0d0e8;
+  --muted:    #3e5570;
+  --muted2:   #607898;
+  --b1:       #00d4ff;
+  --b2:       #ffaa00;
+  --ok:       #00cc88;
+  --warn:     #ffaa00;
+  --err:      #ff4466;
+  --s-exists:  #3e5570;
+  --s-rcvd:   #3377ee;
+  --s-pulled: #8855ee;
+  --s-acked:  #00aa77;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+/* Subtle grid backdrop */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(0,212,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,212,255,.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none; z-index: 0;
+}
+
+.wrap {
+  position: relative; z-index: 1;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 28px 24px 40px;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding-bottom: 18px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+.header h1 {
+  font-size: 20px; font-weight: 700;
+  letter-spacing: .12em; color: #fff;
+}
+.header .ver  { font-size: 10px; color: var(--muted2); }
+.header .tag  { font-size: 10px; color: var(--muted2); font-style: italic; margin-left: auto; }
+
+/* ── Setup banner ────────────────────────────────────────────────────────── */
+.setup-banner {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 11px 16px;
+  margin-bottom: 22px;
+  display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  transition: opacity .4s, max-height .4s ease, padding .4s, margin .4s;
+  overflow: hidden; max-height: 80px;
+}
+.setup-banner.faded { opacity: 0; max-height: 0; padding: 0; margin: 0; pointer-events: none; }
+.setup-step {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 10px; color: var(--muted2);
+}
+.setup-step .n {
+  width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--border2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 700; color: var(--muted2); flex-shrink: 0;
+}
+.setup-step code {
+  background: rgba(255,255,255,.04); border: 1px solid var(--border2);
+  border-radius: 3px; padding: 2px 6px; font-family: inherit; font-size: 10px;
+  color: var(--text); cursor: pointer; transition: background .15s;
+  user-select: all; position: relative;
+}
+.setup-step code:hover { background: rgba(255,255,255,.08); }
+.setup-step code:hover::after {
+  content: 'click to copy';
+  position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%);
+  background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: 3px; padding: 2px 6px; font-size: 9px; color: var(--muted2);
+  white-space: nowrap; pointer-events: none;
+}
+.setup-step code.b1c { color: var(--b1); }
+.setup-step code.b2c { color: var(--b2); }
+.setup-divider { color: var(--border2); font-size: 14px; }
+.setup-label { font-size: 10px; font-weight: 700; color: var(--muted2); letter-spacing: .06em; white-space: nowrap; }
+
+/* ── Arena ───────────────────────────────────────────────────────────────── */
+.arena {
+  display: grid;
+  grid-template-columns: 1fr 144px 1fr;
+  margin-bottom: 20px;
+  min-height: 500px;
+}
+
+/* ── Node ────────────────────────────────────────────────────────────────── */
+.node {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  display: flex; flex-direction: column;
+}
+.node.left  { border-radius: 6px 0 0 6px; }
+.node.right { border-radius: 0 6px 6px 0; border-left: none; }
+
+.node-hdr {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 9px;
+}
+.node-hdr.b1 { border-top: 2px solid var(--b1); }
+.node-hdr.b2 { border-top: 2px solid var(--b2); }
+
+.node-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+}
+.b1 .node-dot { background: var(--b1); box-shadow: 0 0 7px var(--b1); }
+.b2 .node-dot { background: var(--b2); box-shadow: 0 0 7px var(--b2); }
+
+.node-title { font-size: 11px; font-weight: 700; letter-spacing: .1em; color: #fff; }
+.node-port  { font-size: 10px; color: var(--muted2); margin-left: auto; }
+
+.status-pill {
+  font-size: 9px; padding: 2px 7px; border-radius: 20px; font-weight: 700;
+  letter-spacing: .05em;
+}
+.status-pill.online  { color: var(--ok);  background: rgba(0,204,136,.1); border: 1px solid rgba(0,204,136,.25); }
+.status-pill.offline { color: var(--err); background: rgba(255,68,102,.1); border: 1px solid rgba(255,68,102,.2); }
+
+.node-body {
+  flex: 1; padding: 12px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 14px;
+}
+
+.section-lbl {
+  font-size: 9px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--muted2);
+  margin-bottom: 7px;
+}
+
+.ping-list {
+  display: flex; flex-direction: column; gap: 6px;
+  min-height: 60px;
+}
+
+.empty { color: var(--muted2); font-size: 11px; font-style: italic; text-align: center; padding: 18px 0; }
+
+/* Ping card */
+.pcard {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 10px;
+  animation: slideIn .25s ease;
+}
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.pcard-top {
+  display: flex; align-items: center; gap: 7px; margin-bottom: 5px;
+}
+.pid { font-size: 10px; color: var(--muted2); }
+
+.badge {
+  font-size: 9px; padding: 2px 6px; border-radius: 2px;
+  font-weight: 700; letter-spacing: .05em;
+}
+.badge-PING_EXISTS    { background: rgba(62,85,112,.35); color: #7a9ab8; border: 1px solid rgba(62,85,112,.6); }
+.badge-PING_RECEIVED  { background: rgba(51,119,238,.2); color: #88aaff; border: 1px solid rgba(51,119,238,.4); }
+.badge-CONTENT_PULLED { background: rgba(136,85,238,.2); color: #bb99ff; border: 1px solid rgba(136,85,238,.4); }
+.badge-ACKNOWLEDGED   { background: rgba(0,170,119,.15); color: #44ddaa; border: 1px solid rgba(0,170,119,.35); }
+
+.ptype { font-size: 9px; color: var(--muted2); margin-left: auto; }
+
+.ppreview {
+  font-size: 11px; color: var(--muted2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-bottom: 5px;
+}
+.ppreview.has-content { color: var(--text); }
+
+.pactions { display: flex; gap: 5px; }
+
+/* ── Compose ─────────────────────────────────────────────────────────────── */
+.compose {
+  border-top: 1px solid var(--border);
+  padding: 10px;
+}
+.compose textarea {
+  width: 100%; resize: none; outline: none;
+  background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: 3px; color: var(--text);
+  font-family: inherit; font-size: 11px; padding: 7px 9px;
+  margin-bottom: 7px;
+  transition: border-color .2s;
+}
+.compose textarea:focus { border-color: var(--b1); }
+.compose-row { display: flex; gap: 6px; align-items: center; }
+.ptype-sel {
+  background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: 3px; color: var(--muted2);
+  font-family: inherit; font-size: 10px; padding: 5px 7px; outline: none;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.btn {
+  font-family: inherit; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; cursor: pointer;
+  border-radius: 3px; border: 1px solid; transition: all .15s;
+}
+.btn:disabled { opacity: .3; cursor: default; }
+
+.btn-send {
+  font-size: 10px; padding: 5px 12px;
+  background: rgba(0,212,255,.1); border-color: rgba(0,212,255,.35); color: var(--b1);
+}
+.btn-send:hover:not(:disabled) {
+  background: rgba(0,212,255,.2); box-shadow: 0 0 14px rgba(0,212,255,.18);
+}
+
+.btn-pull {
+  font-size: 9px; padding: 3px 8px;
+  background: rgba(255,170,0,.1); border-color: rgba(255,170,0,.35); color: var(--b2);
+}
+.btn-pull:hover:not(:disabled) { background: rgba(255,170,0,.2); }
+
+.btn-ignore {
+  font-size: 9px; padding: 3px 8px;
+  background: transparent; border-color: var(--border2); color: var(--muted2);
+}
+.btn-ignore:hover:not(:disabled) { border-color: var(--err); color: var(--err); }
+
+.btn-block {
+  font-size: 9px; padding: 3px 8px;
+  background: rgba(255,68,102,.07); border-color: rgba(255,68,102,.25); color: var(--err);
+}
+.btn-block:hover:not(:disabled) { background: rgba(255,68,102,.15); }
+
+/* ── Network channel ─────────────────────────────────────────────────────── */
+.channel {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 0 12px; gap: 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(to bottom, var(--surface) 0%, var(--bg) 50%, var(--surface) 100%);
+}
+
+.ch-lbl {
+  font-size: 9px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 20px;
+}
+
+.ch-line {
+  position: relative;
+  width: 100%; height: 1px;
+  background: var(--border);
+  margin: 0;
+}
+
+.ch-spacer { height: 18px; }
+
+/* Arrow tips */
+.ch-line::after {
+  content: '';
+  position: absolute; top: -3px;
+  width: 0; height: 0;
+  border-style: solid;
+}
+.ch-line.rightward::after {
+  right: 0;
+  border-width: 4px 0 4px 6px;
+  border-color: transparent transparent transparent var(--muted);
+}
+.ch-line.leftward::after {
+  left: 0;
+  border-width: 4px 6px 4px 0;
+  border-color: transparent var(--muted) transparent transparent;
+}
+
+/* Packets */
+.packet {
+  position: absolute; top: -5px;
+  width: 11px; height: 11px; border-radius: 50%;
+  pointer-events: none;
+}
+.pkt-send {
+  background: var(--b1);
+  box-shadow: 0 0 10px var(--b1), 0 0 22px rgba(0,212,255,.25);
+  animation: flyRight 1.3s cubic-bezier(.4,0,.6,1) forwards;
+}
+.pkt-pull {
+  background: var(--b2);
+  box-shadow: 0 0 10px var(--b2), 0 0 22px rgba(255,170,0,.25);
+  animation: flyLeft 1.3s cubic-bezier(.4,0,.6,1) forwards;
+}
+@keyframes flyRight {
+  from { left: -5px; opacity: 0; }
+  8%   { opacity: 1; }
+  92%  { opacity: 1; }
+  to   { left: calc(100% - 5px); opacity: 0; }
+}
+@keyframes flyLeft {
+  from { left: calc(100% - 5px); opacity: 0; }
+  8%   { opacity: 1; }
+  92%  { opacity: 1; }
+  to   { left: -5px; opacity: 0; }
+}
+
+.ch-legend {
+  margin-top: 22px;
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  font-size: 9px; color: var(--muted); text-align: center;
+}
+.ch-legend .l-ping { color: var(--b1); }
+.ch-legend .l-pull { color: var(--b2); }
+
+/* State diagram */
+.state-diagram {
+  margin-top: 20px;
+  display: flex; flex-direction: column;
+  align-items: center; gap: 0;
+}
+.sd-node {
+  font-size: 9px; letter-spacing: .05em;
+  padding: 4px 8px; border-radius: 3px; border: 1px solid var(--border);
+  color: var(--muted2); background: var(--surface2);
+  transition: all .3s;
+  white-space: nowrap;
+}
+.sd-node.active { color: #fff; box-shadow: 0 0 10px; }
+.sd-node.act-exists   { border-color: #3e5570; box-shadow: 0 0 8px rgba(62,85,112,.6); color: #7a9ab8; }
+.sd-node.act-received { border-color: var(--s-rcvd); box-shadow: 0 0 8px rgba(51,119,238,.4); color: #88aaff; }
+.sd-node.act-pulled   { border-color: var(--s-pulled); box-shadow: 0 0 8px rgba(136,85,238,.4); color: #bb99ff; }
+.sd-node.act-acked    { border-color: var(--ok); box-shadow: 0 0 8px rgba(0,204,136,.35); color: #44ddaa; }
+.sd-arrow { font-size: 10px; color: var(--muted); line-height: 1.4; }
+
+/* ── Event log ───────────────────────────────────────────────────────────── */
+.evlog {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px; overflow: hidden;
+}
+.evlog-hdr {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+}
+.evlog-hdr span { font-size: 10px; letter-spacing: .1em; color: var(--muted2); text-transform: uppercase; }
+.blink-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--ok);
+  animation: blinkDot 2s ease infinite;
+}
+@keyframes blinkDot { 0%,100% { opacity: 1; } 50% { opacity: .2; } }
+
+.evlog-body {
+  padding: 6px;
+  max-height: 190px; overflow-y: auto;
+  display: flex; flex-direction: column-reverse;
+}
+.ev {
+  display: flex; gap: 10px; padding: 4px 8px; border-radius: 2px;
+  animation: evIn .2s ease;
+}
+@keyframes evIn { from { opacity: 0; transform: translateX(-5px); } to { opacity: 1; transform: translateX(0); } }
+.ev:hover { background: var(--surface2); }
+.ev-t  { color: var(--muted2); font-size: 10px; flex-shrink: 0; }
+.ev-ok   { color: var(--ok); }
+.ev-info { color: var(--b1); }
+.ev-warn { color: var(--warn); }
+.ev-err  { color: var(--err); }
+.ev-msg  { font-size: 11px; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="header">
+    <h1>PING</h1>
+    <span class="ver">draft 0.1</span>
+    <span class="tag">Persistent Independent Notification Gateway — interactive demo</span>
+  </header>
+
+  <div class="setup-banner" id="setupBanner">
+    <span class="setup-label">QUICK START</span>
+    <div class="setup-step">
+      <span class="n">1</span>
+      <span>install</span>
+      <code onclick="copyCmd(this)">npm install</code>
+    </div>
+    <span class="setup-divider">·</span>
+    <div class="setup-step">
+      <span class="n">2</span>
+      <span>start Blog 1</span>
+      <code class="b1c" onclick="copyCmd(this)">node ping.js 5000</code>
+    </div>
+    <span class="setup-divider">·</span>
+    <div class="setup-step">
+      <span class="n">3</span>
+      <span>start Blog 2</span>
+      <code class="b2c" onclick="copyCmd(this)">node ping.js 5001</code>
+    </div>
+  </div>
+
+  <div class="arena">
+
+    <!-- ── Blog 1 ──────────────────────────────────────────────────────── -->
+    <div class="node left">
+      <div class="node-hdr b1">
+        <div class="node-dot"></div>
+        <span class="node-title">BLOG 1</span>
+        <span class="node-port">:5000</span>
+        <span class="status-pill offline" id="b1status">offline</span>
+      </div>
+      <div class="node-body">
+        <div>
+          <div class="section-lbl">Outbox</div>
+          <div class="ping-list" id="outboxList">
+            <div class="empty">no sent pings yet</div>
+          </div>
+        </div>
+      </div>
+      <div class="compose">
+        <textarea id="composeText" rows="2" placeholder="compose your content…"></textarea>
+        <div class="compose-row">
+          <select class="ptype-sel" id="pTypeSelect">
+            <option value="ask">ask</option>
+            <option value="reply">reply</option>
+            <option value="reblog">reblog</option>
+            <option value="follow">follow</option>
+            <option value="notification">notification</option>
+          </select>
+          <button class="btn btn-send" id="sendBtn" onclick="doSend()">→ Send Ping</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Channel ────────────────────────────────────────────────────── -->
+    <div class="channel">
+      <div class="ch-lbl">channel</div>
+
+      <div class="ch-line rightward" id="pingLine"></div>
+      <div class="ch-spacer"></div>
+      <div class="ch-line leftward" id="pullLine"></div>
+
+      <div class="ch-legend">
+        <span class="l-ping">→ ping</span>
+        <span class="l-pull">← pull</span>
+      </div>
+
+      <div class="state-diagram">
+        <div class="sd-node" id="sd-exists">PING_EXISTS</div>
+        <div class="sd-arrow">↓</div>
+        <div class="sd-node" id="sd-received">PING_RECEIVED</div>
+        <div class="sd-arrow">↓</div>
+        <div class="sd-node" id="sd-pulled">CONTENT_PULLED</div>
+        <div class="sd-arrow">↓</div>
+        <div class="sd-node" id="sd-acked">ACKNOWLEDGED</div>
+      </div>
+    </div>
+
+    <!-- ── Blog 2 ──────────────────────────────────────────────────────── -->
+    <div class="node right">
+      <div class="node-hdr b2">
+        <div class="node-dot"></div>
+        <span class="node-title">BLOG 2</span>
+        <span class="node-port">:5001</span>
+        <span class="status-pill offline" id="b2status">offline</span>
+      </div>
+      <div class="node-body">
+        <div>
+          <div class="section-lbl">Inbox</div>
+          <div class="ping-list" id="inboxList">
+            <div class="empty">no pending pings</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Event log ──────────────────────────────────────────────────────── -->
+  <div class="evlog">
+    <div class="evlog-hdr">
+      <div class="blink-dot"></div>
+      <span>Event Log</span>
+    </div>
+    <div class="evlog-body" id="evlog">
+      <div class="ev">
+        <span class="ev-t">--:--:--</span>
+        <span class="ev-msg">Run <span style="color:var(--b1)">node ping.js 5000</span> and <span style="color:var(--b2)">node ping.js 5001</span>, then compose a ping above</span>
+      </div>
+    </div>
+  </div>
+
+</div><!-- .wrap -->
+
+<script>
+const B1 = 'http://localhost:5000';
+const B2 = 'http://localhost:5001';
+
+// Local mirrors of server state
+const outbox = new Map(); // pingId → { state, content, payload_type }
+const inbox  = new Map(); // pingId → { state, origin, payload_type, content }
+
+// Track dismissed/blocked so syncInbox never re-adds them
+const ignoredIds     = new Set(); // ping IDs the receiver explicitly ignored
+const blockedOrigins = new Set(); // origins the receiver has blocked
+
+// ── Logging ────────────────────────────────────────────────────────────────
+function log(msg, type = 'info') {
+  const el  = document.getElementById('evlog');
+  const now = new Date().toLocaleTimeString('en-GB', { hour12: false });
+  const ev  = document.createElement('div');
+  ev.className = 'ev';
+  ev.innerHTML = `<span class="ev-t">${now}</span><span class="ev-msg ev-${type}">${msg}</span>`;
+  el.prepend(ev);
+}
+
+// ── Copy helper ────────────────────────────────────────────────────────────
+function copyCmd(el) {
+  navigator.clipboard.writeText(el.textContent).then(() => {
+    const orig = el.textContent;
+    el.textContent = 'copied!';
+    setTimeout(() => el.textContent = orig, 1200);
+  });
+}
+
+// ── State diagram highlight ────────────────────────────────────────────────
+const sdMap = {
+  PING_EXISTS:    { id: 'sd-exists',   cls: 'act-exists'   },
+  PING_RECEIVED:  { id: 'sd-received', cls: 'act-received' },
+  CONTENT_PULLED: { id: 'sd-pulled',   cls: 'act-pulled'   },
+  ACKNOWLEDGED:   { id: 'sd-acked',    cls: 'act-acked'    },
+};
+
+function highlightState(state) {
+  for (const { id, cls } of Object.values(sdMap)) {
+    const n = document.getElementById(id);
+    n.className = 'sd-node';
+    if (sdMap[state] && sdMap[state].id === id) n.classList.add('active', cls);
+  }
+}
+
+// ── Health ─────────────────────────────────────────────────────────────────
+async function ping(base) {
+  try {
+    const r = await fetch(`${base}/inbox`, { signal: AbortSignal.timeout(1800) });
+    return r.ok;
+  } catch { return false; }
+}
+
+async function checkHealth() {
+  const [ok1, ok2] = await Promise.all([ping(B1), ping(B2)]);
+
+  const s1 = document.getElementById('b1status');
+  s1.textContent = ok1 ? 'online' : 'offline';
+  s1.className   = `status-pill ${ok1 ? 'online' : 'offline'}`;
+
+  const s2 = document.getElementById('b2status');
+  s2.textContent = ok2 ? 'online' : 'offline';
+  s2.className   = `status-pill ${ok2 ? 'online' : 'offline'}`;
+
+  if (ok1 && ok2) {
+    document.getElementById('setupBanner').classList.add('faded');
+  }
+}
+
+setInterval(checkHealth, 3000);
+checkHealth();
+
+// ── Packet animation ───────────────────────────────────────────────────────
+function animate(lineId, dir) {
+  return new Promise(resolve => {
+    const line = document.getElementById(lineId);
+    const pkt  = document.createElement('div');
+    pkt.className = `packet pkt-${dir}`;
+    line.appendChild(pkt);
+    setTimeout(() => { pkt.remove(); resolve(); }, 1350);
+  });
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function renderOutbox() {
+  const el = document.getElementById('outboxList');
+  if (!outbox.size) { el.innerHTML = '<div class="empty">no sent pings yet</div>'; return; }
+  el.innerHTML = '';
+  for (const [id, e] of [...outbox].reverse()) {
+    const short   = id.slice(0, 8);
+    const preview = (e.content || '').slice(0, 55) + (e.content?.length > 55 ? '…' : '');
+    const div = document.createElement('div');
+    div.className = 'pcard';
+    div.id = `out-${id}`;
+    div.innerHTML = `
+      <div class="pcard-top">
+        <span class="pid">#${short}</span>
+        <span class="badge badge-${e.state}">${e.state}</span>
+        <span class="ptype">${e.payload_type}</span>
+      </div>
+      <div class="ppreview ${preview ? 'has-content' : ''}">${preview || '(no content)'}</div>
+    `;
+    el.appendChild(div);
+  }
+}
+
+function renderInbox() {
+  const el = document.getElementById('inboxList');
+  if (!inbox.size) { el.innerHTML = '<div class="empty">no pending pings</div>'; return; }
+  el.innerHTML = '';
+  for (const [id, e] of [...inbox].reverse()) {
+    const short   = id.slice(0, 8);
+    const preview = (e.content || '').slice(0, 55) + (e.content?.length > 55 ? '…' : '');
+    const div = document.createElement('div');
+    div.className = 'pcard';
+    div.id = `in-${id}`;
+    const actions = e.state !== 'ACKNOWLEDGED' ? `
+      <div class="pactions">
+        <button class="btn btn-pull"   onclick="doPull('${id}')">↙ Pull</button>
+        <button class="btn btn-ignore" onclick="doIgnore('${id}')">Ignore</button>
+        <button class="btn btn-block"  onclick="doBlock('${id}')">Block</button>
+      </div>` : '';
+    div.innerHTML = `
+      <div class="pcard-top">
+        <span class="pid">#${short}</span>
+        <span class="badge badge-${e.state}">${e.state}</span>
+        <span class="ptype">${e.payload_type}</span>
+      </div>
+      <div class="ppreview ${preview ? 'has-content' : ''}">${preview || '(waiting for pull…)'}</div>
+      ${actions}
+    `;
+    el.appendChild(div);
+  }
+}
+
+// ── Send ───────────────────────────────────────────────────────────────────
+async function doSend() {
+  const content      = document.getElementById('composeText').value.trim();
+  const payload_type = document.getElementById('pTypeSelect').value;
+  if (!content) { log('write some content first', 'warn'); return; }
+
+  const btn = document.getElementById('sendBtn');
+  btn.disabled = true;
+
+  try {
+    const resp = await fetch(`${B1}/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ origin: B1, target: B2, payload_type, content }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    const id = data.ping_id;
+
+    outbox.set(id, { state: 'PING_EXISTS', content, payload_type });
+    renderOutbox();
+    highlightState('PING_EXISTS');
+    log(`ping created — #${id.slice(0,8)} [${payload_type}] → PING_EXISTS`, 'info');
+    document.getElementById('composeText').value = '';
+
+    // Animate ping traveling across
+    await animate('pingLine', 'send');
+
+    // Per spec §Blocking and Consent: Blog 1 cannot distinguish "received",
+    // "offline", "ignored", or "blocked" — the outbox stays PING_EXISTS until
+    // Blog 2 explicitly pulls and the ACK comes back as a 410. We still sync
+    // the inbox so Blog 2's panel refreshes, but intentionally do NOT use the
+    // result to advance Blog 1's outbox state.
+    await syncInbox();
+    log(`ping in flight — #${id.slice(0,8)} awaiting acknowledgement`, 'info');
+  } catch (err) {
+    log(`send failed: ${err.message}`, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── Pull ───────────────────────────────────────────────────────────────────
+async function doPull(id) {
+  log(`Blog 2 pulling content for #${id.slice(0,8)}…`, 'info');
+  highlightState('CONTENT_PULLED');
+  const btn = document.querySelector(`#in-${id} .btn-pull`);
+  if (btn) btn.disabled = true;
+
+  await animate('pullLine', 'pull');
+
+  try {
+    const resp = await fetch(`${B2}/pull/${id}`, { method: 'POST' });
+    if (!resp.ok) {
+      const e = await resp.json().catch(() => ({}));
+      throw new Error(e.error || `HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+
+    const ie = inbox.get(id);
+    if (ie) { ie.state = 'ACKNOWLEDGED'; ie.content = data.content; }
+    const oe = outbox.get(id);
+    if (oe) { oe.state = 'ACKNOWLEDGED'; }
+
+    renderInbox();
+    renderOutbox();
+    highlightState('ACKNOWLEDGED');
+    log(`content pulled — #${id.slice(0,8)} → ACKNOWLEDGED ✓`, 'ok');
+  } catch (err) {
+    log(`pull failed: ${err.message}`, 'err');
+    if (btn) btn.disabled = false;
+    highlightState('PING_RECEIVED');
+  }
+}
+
+// ── Ignore ─────────────────────────────────────────────────────────────────
+function doIgnore(id) {
+  ignoredIds.add(id);   // prevent syncInbox from resurrecting it
+  inbox.delete(id);
+  renderInbox();
+  log(`#${id.slice(0,8)} ignored — Blog 1 receives no notification (silence is the spec)`, 'warn');
+}
+
+// ── Block ──────────────────────────────────────────────────────────────────
+async function doBlock(id) {
+  const e = inbox.get(id);
+  if (!e) return;
+  try {
+    await fetch(`${B2}/block`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ origin: e.origin }),
+    });
+    // Track locally so syncInbox never re-surfaces this ping or future ones
+    // from the same origin (server returns 204-silence for all of them)
+    blockedOrigins.add(e.origin);
+    ignoredIds.add(id);
+    inbox.delete(id);
+    renderInbox();
+    log(`origin blocked: ${e.origin} — future pings silently dropped`, 'warn');
+  } catch (err) {
+    log(`block failed: ${err.message}`, 'err');
+  }
+}
+
+// ── Sync ───────────────────────────────────────────────────────────────────
+async function syncInbox() {
+  try {
+    const resp = await fetch(`${B2}/inbox`);
+    if (!resp.ok) return;
+    const entries = await resp.json();
+    for (const e of entries) {
+      // Never re-surface a ping the receiver dismissed or an origin they blocked
+      if (ignoredIds.has(e.ping_id) || blockedOrigins.has(e.origin)) continue;
+
+      if (!inbox.has(e.ping_id)) {
+        inbox.set(e.ping_id, {
+          state:        e.state,
+          origin:       e.origin,
+          payload_type: e.payload_type,
+          content_hash: e.content_hash,
+        });
+        // Do NOT advance the outbox state here. Per spec §Blocking and Consent,
+        // Blog 1 has no visibility into whether its ping was received, ignored,
+        // or blocked. The outbox stays PING_EXISTS until ACKNOWLEDGED (410).
+      } else {
+        inbox.get(e.ping_id).state = e.state;
+      }
+    }
+    renderInbox();
+  } catch (_) {}
+}
+
+// Periodic sync — catches retry-delivered pings and state drift
+setInterval(async () => {
+  await syncInbox();
+  // Refresh outbox states
+  for (const [id, e] of outbox) {
+    if (e.state === 'ACKNOWLEDGED') continue;
+    try {
+      const r = await fetch(`${B1}/outbox/${id}`);
+      if (r.status === 410 && e.state !== 'ACKNOWLEDGED') {
+        e.state = 'ACKNOWLEDGED';
+        renderOutbox();
+      }
+    } catch (_) {}
+  }
+}, 4000);
+</script>
+</body>
+</html>
