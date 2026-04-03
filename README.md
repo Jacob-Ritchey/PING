@@ -6,7 +6,7 @@ PING is a lightweight, asynchronous, consent-based notification primitive — a 
 
 The purpose is to prove the protocol's language-agnosticism, not to provide a library. Read the implementations; reason about the design. Careful consideration should be taken before integrating any of this code into a system — especially security or privacy oriented ones.
 
-For a full introduction to the protocol and its design, the [landing page](#https://p1n6.org) covers the motivation, behaviour, and intended use.
+For a full introduction to the protocol and its design, the [landing page](https://p1n6.org/) covers the motivation, behaviour, and intended use.
 
 ## The Idea
 
